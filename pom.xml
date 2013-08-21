@@ -106,6 +106,7 @@
         <module>build</module>
         <module>extension</module>
         <module>workaround</module>
+        <module>modular-deployer</module>
     </modules>
 
     <build>
