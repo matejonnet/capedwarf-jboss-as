@@ -35,6 +35,7 @@ import org.jboss.as.controller.descriptions.ResourceDescriptionResolver;
 import org.jboss.as.controller.descriptions.StandardResourceDescriptionResolver;
 import org.jboss.as.controller.operations.common.GenericSubsystemDescribeHandler;
 import org.jboss.as.controller.parsing.ExtensionParsingContext;
+import org.jboss.as.controller.parsing.ParseUtils;
 import org.jboss.as.controller.persistence.SubsystemMarshallingContext;
 import org.jboss.as.controller.registry.ManagementResourceRegistration;
 import org.jboss.as.controller.registry.OperationEntry;
@@ -60,7 +61,7 @@ public class ModularDeployerExtension implements Extension {
     /**
      * The name space used for the {@code substystem} element
      */
-    public static final String NAMESPACE = "urn:jboss:domain:capedwarf:1.0";
+    public static final String NAMESPACE = "urn:jboss:domain:modular-deployer:1.0";
 
     /**
      * The name of our subsystem within the model.
@@ -72,7 +73,7 @@ public class ModularDeployerExtension implements Extension {
     /**
      * The parser used for parsing our subsystem
      */
-//    private final SubsystemParser parser = new SubsystemParser();
+    private final SubsystemParser parser = new SubsystemParser();
 
     static ResourceDescriptionResolver getResourceDescriptionResolver(final String keyPrefix) {
         return new StandardResourceDescriptionResolver(keyPrefix, RESOURCE_NAME, ModularDeployerExtension.class.getClassLoader(), true, false);
@@ -80,7 +81,7 @@ public class ModularDeployerExtension implements Extension {
 
     @Override
     public void initializeParsers(ExtensionParsingContext context) {
-//        context.setSubsystemXmlMapping(SUBSYSTEM_NAME, NAMESPACE, parser);
+        context.setSubsystemXmlMapping(SUBSYSTEM_NAME, NAMESPACE, parser);
     }
 
     @Override
@@ -89,36 +90,48 @@ public class ModularDeployerExtension implements Extension {
         final ManagementResourceRegistration registration = subsystem.registerSubsystemModel(ModularDeployerDefinition.INSTANCE);
         registration.registerOperationHandler(ModelDescriptionConstants.DESCRIBE, GenericSubsystemDescribeHandler.INSTANCE, GenericSubsystemDescribeHandler.INSTANCE, false, OperationEntry.EntryType.PRIVATE);
         // Register parser
-//        subsystem.registerXMLElementWriter(parser);
+        subsystem.registerXMLElementWriter(parser);
     }
 
 
     /**
      * The subsystem parser, which uses stax to read and write to and from xml
      */
-//    private static class SubsystemParser implements XMLStreamConstants, XMLElementReader<List<ModelNode>>, XMLElementWriter<SubsystemMarshallingContext> {
-//
-//        /**
-//         * {@inheritDoc}
-//         */
-//        @Override
-//        public void writeContent(XMLExtendedStreamWriter writer, SubsystemMarshallingContext context) throws XMLStreamException {
-//            context.startSubsystemElement(ModularDeployerExtension.NAMESPACE, false);
+    private static class SubsystemParser implements XMLStreamConstants, XMLElementReader<List<ModelNode>>, XMLElementWriter<SubsystemMarshallingContext> {
+
+        /**
+         * {@inheritDoc}
+         */
+        @Override
+        public void writeContent(XMLExtendedStreamWriter writer, SubsystemMarshallingContext context) throws XMLStreamException {
+            context.startSubsystemElement(ModularDeployerExtension.NAMESPACE, false);
 //            ModularDeployerDefinition.APPENGINE_API.marshallAsElement(context.getModelNode(),writer);
 //            ModularDeployerDefinition.ADMIN_TGT.marshallAsElement(context.getModelNode(),writer);
-//            writer.writeEndElement();
-//        }
-//
-//        /**
-//         * {@inheritDoc}
-//         */
-//        @Override
-//        public void readElement(XMLExtendedStreamReader reader, List<ModelNode> list) throws XMLStreamException {
-//            final ModelNode operation = new ModelNode();
-//            operation.get(OP).set(ADD);
-//            operation.get(OP_ADDR).add(SUBSYSTEM, SUBSYSTEM_NAME);
-//        }
-//    }
+            writer.writeEndElement();
+        }
+
+        /**
+         * {@inheritDoc}
+         */
+        @Override
+        public void readElement(XMLExtendedStreamReader reader, List<ModelNode> list) throws XMLStreamException {
+            final ModelNode operation = new ModelNode();
+            operation.get(OP).set(ADD);
+            operation.get(OP_ADDR).add(SUBSYSTEM, SUBSYSTEM_NAME);
+//            while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
+//                if (CapedwarfModel.APPENGINE_API.equals(reader.getLocalName())) {
+//                    CapedwarfDefinition.APPENGINE_API.parseAndSetParameter(reader.getElementText(), operation, reader);
+//                } else if (CapedwarfModel.ADMIN_AUTH.equals(reader.getLocalName())) {
+//                    CapedwarfDefinition.ADMIN_TGT.parseAndSetParameter(reader.getElementText(), operation, reader);
+//                } else {
+//                    reader.handleAny(list);
+//                }
+//            }
+            list.add(operation);
+            // Require no content
+            ParseUtils.requireNoContent(reader);
+        }
+    }
 
 
 }

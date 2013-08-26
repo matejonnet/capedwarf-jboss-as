@@ -22,18 +22,31 @@
 
 package org.jboss.as.modulardeployer.extension;
 
+import java.io.IOException;
 import java.util.List;
 
 import org.jboss.as.controller.AbstractBoottimeAddStepHandler;
 import org.jboss.as.controller.OperationContext;
 import org.jboss.as.controller.OperationFailedException;
 import org.jboss.as.controller.ServiceVerificationHandler;
-import org.jboss.as.modulardeployer.deployment.ModulardeploymentProcessor;
+import org.jboss.as.ee.structure.EarInitializationProcessor;
+import org.jboss.as.ee.structure.EarMetaDataParsingProcessor;
+import org.jboss.as.modulardeployer.deployment.ModularDeploymentProcessor;
 import org.jboss.as.server.AbstractDeploymentChainStep;
 import org.jboss.as.server.DeploymentProcessorTarget;
 import org.jboss.as.server.deployment.Phase;
+import org.jboss.as.server.deployment.module.TempFileProviderService;
 import org.jboss.dmr.ModelNode;
+import org.jboss.msc.service.Service;
+import org.jboss.msc.service.ServiceBuilder;
 import org.jboss.msc.service.ServiceController;
+import org.jboss.msc.service.ServiceName;
+import org.jboss.msc.service.ServiceTarget;
+import org.jboss.msc.service.StartContext;
+import org.jboss.msc.service.StartException;
+import org.jboss.msc.service.StopContext;
+import org.jboss.vfs.TempDir;
+import org.jboss.vfs.VFSUtils;
 
 /**
  * Handler responsible for adding the subsystem resource to the model
@@ -68,8 +81,38 @@ class ModularDeployerSubsystemAdd extends AbstractBoottimeAddStepHandler {
             
             @Override
             public void execute(DeploymentProcessorTarget processorTarget) {
-                processorTarget.addDeploymentProcessor(ModularDeployerExtension.SUBSYSTEM_NAME, Phase.STRUCTURE, 1, new ModulardeploymentProcessor());
+                final ServiceTarget serviceTarget = context.getServiceTarget();
+                final TempDir tempDir = createTempDir(serviceTarget, newControllers);
+
+                final int initialStructureOrder = Math.max(Math.max(Phase.STRUCTURE_WAR, Phase.STRUCTURE_WAR_DEPLOYMENT_INIT), Phase.STRUCTURE_EAR);
+                processorTarget.addDeploymentProcessor(ModularDeployerExtension.SUBSYSTEM_NAME, Phase.STRUCTURE, initialStructureOrder + 10, new EarInitializationProcessor());
+                processorTarget.addDeploymentProcessor(ModularDeployerExtension.SUBSYSTEM_NAME, Phase.STRUCTURE, initialStructureOrder + 20, new EarMetaDataParsingProcessor());
+                processorTarget.addDeploymentProcessor(ModularDeployerExtension.SUBSYSTEM_NAME, Phase.STRUCTURE, initialStructureOrder + 30, new ModularDeploymentProcessor(tempDir));
             }
         }, OperationContext.Stage.RUNTIME);
+    }
+    
+    protected static TempDir createTempDir(final ServiceTarget serviceTarget, final List<ServiceController<?>> newControllers) {
+        final TempDir tempDir;
+        try {
+            tempDir = TempFileProviderService.provider().createTempDir(ModularDeployerExtension.SUBSYSTEM_NAME);
+        } catch (IOException e) {
+            throw new IllegalArgumentException("Cannot create temp dir for CapeDwarf sub-system!", e);
+        }
+
+        final ServiceBuilder<TempDir> builder = serviceTarget.addService(ServiceName.JBOSS.append(ModularDeployerExtension.SUBSYSTEM_NAME).append("tempDir"), new Service<TempDir>() {
+            public void start(StartContext context) throws StartException {
+            }
+
+            public void stop(StopContext context) {
+                VFSUtils.safeClose(tempDir);
+            }
+
+            public TempDir getValue() throws IllegalStateException, IllegalArgumentException {
+                return tempDir;
+            }
+        });
+        newControllers.add(builder.setInitialMode(ServiceController.Mode.ACTIVE).install());
+        return tempDir;
     }
 }
